@@ -78,6 +78,7 @@ benchmark pure-txt-trie-bench
       trivial,
       pure,
       containers,
+      unordered-containers,
       pure-txt-trie
 
   default-extensions:

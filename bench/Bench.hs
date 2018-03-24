@@ -4,6 +4,8 @@ import Trivial
 
 import qualified Data.Map.Strict as Map
 
+import qualified Data.HashMap.Strict as HashMap
+
 import qualified Pure.Data.Txt as Txt
 import qualified Pure.Data.Txt.Trie as Trie
 
@@ -24,7 +26,9 @@ suite = tests
 -- * Lookup
 lookup = tests
     [ scope "1" lookupFast
+    , scope "1'" lookupFast'
     , scope "7" lookupSlow
+    , scope "7'" lookupSlow'
     ]
 
 lookupFast = do
@@ -39,10 +43,24 @@ lookupSlow = do
   report b0 b1
   complete
 
+lookupFast' = do
+  b0 <- whnf "trie" (Trie.lookup "zzzzzzzzzz") trie
+  b1 <- whnf "hashmap"   (HashMap.lookup "zzzzzzzzzz") hashmapping
+  report b0 b1
+  complete
+
+lookupSlow' = do
+  b0 <- whnf "trie" (Trie.lookup "abcdefgz") trie
+  b1 <- whnf "hashmap"   (HashMap.lookup "abcdefgz") hashmapping
+  report b0 b1
+  complete
+
+
 -- * Insert
 insert = tests
     [ scope "shared" insertShared
     , scope "unrelated" insertUnrelated
+    , scope "unrelated'" insertUnrelated'
     ]
 
 insertShared = do
@@ -57,11 +75,19 @@ insertUnrelated = do
   report b0 b1
   complete
 
+insertUnrelated' = do
+  b0 <- whnf "trie" (Trie.insert "xxxxxxxxxxx" 1) trie
+  b1 <- whnf "hashmap"   (HashMap.insert "xxxxxxxxxxx" 1) hashmapping
+  report b0 b1
+  complete
+
 -- * FromList
 
 fromList = tests
     [ scope "small" fromListSmall
+    , scope "small'" fromListSmall'
     , scope "large" fromListLarge
+    , scope "large'" fromListLarge'
     ]
 
 fromListSmall = do
@@ -71,10 +97,24 @@ fromListSmall = do
   complete
 
 fromListLarge = do
-  b0 <- nf "TxtTrie.fromList" Trie.fromList large
-  b1 <- nf "Map.fromList"      Map.fromList large
+  b0 <- nf "trie" Trie.fromList large
+  b1 <- nf "map"   Map.fromList large
   report b0 b1
   complete
+
+fromListSmall' = do
+  b0 <- nf "trie" Trie.fromList small
+  b1 <- nf "hashmap" HashMap.fromList small
+  report b0 b1
+  complete
+
+fromListLarge' = do
+  b0 <- nf "trie" Trie.fromList large
+  b1 <- nf "hashmap" HashMap.fromList large
+  report b0 b1
+  complete
+
+
 
 -- * ToList
 
@@ -110,16 +150,20 @@ toListLarge = do
 {-# NOINLINE small #-}
 small = take 100 large
 
+-- The tests for HashMap get a little funky if
+-- we add an extra letter to the dataset; not
+-- sure what that's about; should probably look
+-- into that to see if it is a HashMap problem
+-- or a Trivial problem.
 {-# NOINLINE large #-}
 large = let sharedPrefix = "abcdefg" in
     ("zzzzzzzzzz",1) :
-    [ (sharedPrefix `Txt.append` Txt.pack [w,x,y,z]
+    [ (sharedPrefix `Txt.append` Txt.pack [w,x,y]
       ,0 :: Int
       )
     | w <- ['a'..'z']
     , x <- ['a'..'z']
     , y <- ['a'..'z']
-    , z <- ['a'..'z']
     ]
 
 {-# NOINLINE trie #-}
@@ -127,6 +171,9 @@ trie = Trie.fromList large
 
 {-# NOINLINE mapping #-}
 mapping = Map.fromList large
+
+{-# NOINLINE hashmapping #-}
+hashmapping = HashMap.fromList large
 
 {-# NOINLINE smallTrie #-}
 smallTrie = Trie.fromList small

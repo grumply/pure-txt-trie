@@ -105,6 +105,8 @@ The unmerge that delete, difference and deletePrefix are based on are non-optima
 
 Note that the `Eq` and `Ord` instances are structural.
 
+A generalization of the Key type with a deconstructing/reconstructing class (like IsList) could be interesting, but would add overhead.  An on-demand deconstruction might be able to avoid the overhead.
+
 TODO:
 * switch to a universal merge
 * use IntMap merges where appropriate
