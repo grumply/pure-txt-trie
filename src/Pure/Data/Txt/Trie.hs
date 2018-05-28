@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE CPP, DeriveGeneric, DeriveAnyClass, ScopedTypeVariables, BangPatterns, ViewPatterns, OverloadedStrings #-}
 module Pure.Data.Txt.Trie
   (
   -- * Trie Types
@@ -59,33 +59,35 @@ module Pure.Data.Txt.Trie
   , splitRoot
   ) where
 
-import Pure.Data hiding (Empty,toList,lookup,Key,empty,foldl,foldr,foldl',foldr',map,mapAccumL,null,find,(<>),(!),(!?))
-
+-- from base
 import Control.Monad
-
 import Data.Char
+import Data.Coerce
+import qualified Data.Foldable as Foldable
 import Data.Maybe
 import Data.Monoid hiding ((<>))
 import Data.Semigroup
-
+import Data.Traversable hiding (mapAccumL)
 import GHC.Generics
+import GHC.Exts (build)
+import Prelude hiding (lookup,map,foldr,foldl,foldl',null,find)
+import qualified Prelude
 
-import Pure.Data.Txt (Txt)
+-- from pure-txt
+import Pure.Data.Txt (Txt,ToTxt(..),FromTxt(..))
 import qualified Pure.Data.Txt as Txt
+#ifndef __GHCJS__
+import qualified Pure.Data.Txt.Internal as Txt (copy)
+#endif
+
+-- from pure-json
+import Pure.Data.JSON (ToJSON,FromJSON)
+
+-- from containers
 import qualified Data.IntMap.Strict as IntMap
 
-import Prelude hiding (lookup,map,foldr,foldl,foldl',null,find)
-
+-- from deepseq
 import Control.DeepSeq
-
-import GHC.Exts (build)
-
-import qualified Data.Foldable as Foldable
-import Data.Traversable hiding (mapAccumL)
-
-import Data.Coerce
-
-import qualified Prelude
 
 {- |
 Pure.Data.Txt.Trie implements a Trie structure that is, in the majority of cases, a drop-in replacement for `Map Txt a`.
@@ -586,7 +588,7 @@ mapWithKey :: (Txt -> a -> b) -> TxtTrie a -> TxtTrie b
 mapWithKey f = go (dl [])
     where
         go k Empty = Empty
-        go k (Leaf k' a) = Leaf k' (f (Txt.pack (fromDL k) `Txt.append` fromKey "" k') a)
+        go k (Leaf k' a) = Leaf k' (f (toTxt (fromDL k) `Txt.append` fromKey "" k') a)
         go k (Branch n bs) = Branch n (IntMap.mapWithKey go' bs)
             where
                 go' c = go (k `snoc` (chr c))
@@ -605,7 +607,7 @@ traverseWithKey :: Applicative t => (Txt -> a -> t b) -> TxtTrie a -> t (TxtTrie
 traverseWithKey f = go (dl [])
     where
         go k Empty = pure Empty
-        go k (Leaf k' a) = Leaf k' <$> f ((Txt.pack (fromDL k)) `Txt.append` fromKey "" k') a
+        go k (Leaf k' a) = Leaf k' <$> f ((toTxt (fromDL k)) `Txt.append` fromKey "" k') a
         go k (Branch n bs) = Branch n <$> IntMap.traverseWithKey go' bs
             where
                 go' c = go (k `snoc` (chr c))
@@ -623,7 +625,7 @@ mapAccumL f z t = go z (dl []) t
         go z k Empty = (z,Empty)
         go z k (Leaf k' b) =
             let
-                (z',c) = f z (Txt.pack (fromDL k) `Txt.append` fromKey "" k') b
+                (z',c) = f z (toTxt (fromDL k) `Txt.append` fromKey "" k') b
             in
                 (z',Leaf k' c)
         go z k (Branch n bs) =
@@ -640,7 +642,7 @@ mapAccumRWithKey f z t = go z (dl []) t
         go z k Empty = (z,Empty)
         go z k (Leaf k' b) =
             let
-                (z',c) = f z (Txt.pack (fromDL k) `Txt.append` fromKey "" k') b
+                (z',c) = f z (toTxt (fromDL k) `Txt.append` fromKey "" k') b
             in
                 (z',Leaf k' c)
         go z k (Branch n bs) =
@@ -693,8 +695,8 @@ foldrWithKey f z = go (dl []) z
     where
         go key z Empty = z
         go key z (Leaf mk v)
-            | isNone mk = f (Txt.pack (fromDL key)) v z
-            | otherwise = f (Txt.pack (fromDL key) `Txt.append` fromKey "" mk) v z
+            | isNone mk = f (toTxt (fromDL key)) v z
+            | otherwise = f (toTxt (fromDL key) `Txt.append` fromKey "" mk) v z
         go key z (Branch _ bs) = IntMap.foldrWithKey go' z bs
             where
                 go' c t z' =
@@ -708,8 +710,8 @@ foldrWithKey' f z = go (dl []) z
     where
         go key !z Empty = z
         go key z (Leaf mk v)
-            | isNone mk = f (Txt.pack (fromDL key)) v z
-            | otherwise = f (Txt.pack (fromDL key) `Txt.append` fromKey "" mk) v z
+            | isNone mk = f (toTxt (fromDL key)) v z
+            | otherwise = f (toTxt (fromDL key) `Txt.append` fromKey "" mk) v z
         go key z (Branch _ bs) = IntMap.foldrWithKey' go' z bs
             where
                 go' c t z' =
@@ -724,8 +726,8 @@ foldlWithKey f z = go (dl []) z
         {-# INLINE go #-}
         go key z Empty = z
         go key z (Leaf mk v)
-            | isNone mk = f z (Txt.pack (fromDL key)) v
-            | otherwise = f z (Txt.pack (fromDL key) `Txt.append` fromKey "" mk) v
+            | isNone mk = f z (toTxt (fromDL key)) v
+            | otherwise = f z (toTxt (fromDL key) `Txt.append` fromKey "" mk) v
         go key z (Branch _ bs) = IntMap.foldlWithKey go' z bs
             where
                 {-# INLINE go' #-}
@@ -741,8 +743,8 @@ foldlWithKey' f z = go (dl []) z
         {-# INLINE go #-}
         go key !z Empty = z
         go key z (Leaf mk v)
-            | isNone mk = f z (Txt.pack (fromDL key)) v
-            | otherwise = f z (Txt.pack (fromDL key) `Txt.append` fromKey "" mk) v
+            | isNone mk = f z (toTxt (fromDL key)) v
+            | otherwise = f z (toTxt (fromDL key) `Txt.append` fromKey "" mk) v
         go key z (Branch _ bs) = IntMap.foldlWithKey' go' z bs
             where
                 {-# INLINE go' #-}
@@ -758,8 +760,8 @@ foldMapWithKey f = go (dl [])
         {-# INLINE go #-}
         go key Empty = mempty
         go key (Leaf mk v)
-            | isNone mk = f (Txt.pack (fromDL key)) v
-            | otherwise = f (Txt.pack (fromDL key) `Txt.append` fromKey "" mk) v
+            | isNone mk = f (toTxt (fromDL key)) v
+            | otherwise = f (toTxt (fromDL key) `Txt.append` fromKey "" mk) v
         go key (Branch _ bs) = IntMap.foldMapWithKey go' bs
             where
                 {-# INLINE go' #-}
