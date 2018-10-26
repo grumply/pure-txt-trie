@@ -1,6 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Trivial hiding (some)
+import Pure.Test hiding (some)
 
 import qualified Data.List as List
 
@@ -15,18 +16,18 @@ import Prelude hiding (toList,fromList,lookup)
 main = run suite
 
 suite = tests
-  [
-   scope "size" size,
-   scope "fromList" fromList,
-   scope "toList" toList,
-   scope "insert" insert,
-   scope "union" union,
-   scope "delete" delete,
-   scope "difference" difference,
-   scope "deletePrefix" deletePrefix,
-   scope "structuralEquality" structuralEquality,
-   scope "lookup" lookup
-  ]
+    [
+        scope "size" size,
+        scope "fromList" fromList,
+        scope "toList" toList,
+        scope "insert" insert,
+        scope "union" union,
+        scope "delete" delete,
+        scope "difference" difference,
+        scope "deletePrefix" deletePrefix,
+        scope "structuralEquality" structuralEquality,
+        scope "lookup" lookup
+    ]
 
 -- * Size
 size = tests

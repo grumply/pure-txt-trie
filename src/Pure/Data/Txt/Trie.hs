@@ -101,7 +101,7 @@ There is overhead in toList and fromList when reconstructing and deconstructing 
 * Implementation
 Internally, conceptually and for ease of implementation, the Trie is structured as nested IntMaps.
 
-`TxtSet` is a type synonym for `TxtTree ()`.
+`TxtSet` is a type synonym for `TxtTrie ()`.
 
 The unmerge that delete, difference and deletePrefix are based on are non-optimal in that they do not recompress after deletion.  To combat this, in the case of a deletion-heavy use-case, you can use `recompress` which is a synonym for `fromList . toList`.
 
@@ -117,7 +117,7 @@ TODO:
 data Key
     = None
     | Suffix {-# UNPACK #-}!Txt
-    deriving (Generic,Eq,Ord,ToJSON,FromJSON)
+    deriving (Show,Generic,Eq,Ord,ToJSON,FromJSON)
 
 instance NFData Key where
     rnf None = ()
@@ -183,7 +183,7 @@ data TxtTrie a
     = Empty
     | Leaf !Key a
     | Branch {-# UNPACK #-}!Int !(TxtTrieInternal a)
-    deriving (Generic,Eq,Ord,ToJSON,FromJSON)
+    deriving (Show,Generic,Eq,Ord,ToJSON,FromJSON)
 
 type TxtSet = TxtTrie ()
 
@@ -274,14 +274,15 @@ toTTI (Leaf k v) = tti k v
 toTTI (Branch _ bs) = bs
 toTTI _ = IntMap.empty
 
--- returns the increase in size (as a result of inserts elements of the right
+-- returns the increase in size (as a result of inserts of elements of the right
 -- into the left) and the new TxtTrie
 {-# INLINE merge #-}
 merge :: Int -> TxtTrie a -> TxtTrie a -> (Int,TxtTrie a)
 
 merge _ x Empty = (0,x)
--- merge is merge is called with curDepth == 1 initially, so we can
--- know if the key value we're working with was already in the Trie
+
+-- merge is called with curDepth == 1 initially, so we can
+-- know if the key we're working with was already in the Trie
 -- (curDepth > 0) or if we are just now adding it (curDepth == 0), so
 -- we can call Txt.copy.
 merge curDepth Empty (Leaf mk v)
@@ -298,11 +299,11 @@ merge _ Empty x = (size x,x)
 merge curDepth l@(Leaf mk _) r@(Leaf mk' v')
     | mk == mk' = (0,Leaf mk v')
     | otherwise =
-        let (added,merged) = mergeBranches (curDepth + 1) (toTTI l) (toTTINoCopy r)
+        let (added,merged) = mergeBranches (curDepth + 1) (toTTINoCopy l) (toTTI r)
         in (added,Branch (1 + added) merged)
 
 merge curDepth l r =
-    let (added,merged) = mergeBranches (curDepth + 1) (toTTI l) (toTTINoCopy r)
+    let (added,merged) = mergeBranches (curDepth + 1) (toTTINoCopy l) (toTTI r)
     in (added,Branch (size l + added) merged)
 
 -- returns increaase in size (as a result of inserting elements of the rigth
@@ -317,7 +318,7 @@ mergeBranches !curDepth bs0 = IntMap.foldrWithKey mergeBranches' (0,bs0)
 #if MIN_VERSION_containers(0,5,10)
             let (!added,bs') = IntMap.alterF go c bs
                 !n' = n + added
-                go Nothing = (size t,Nothing)
+                go Nothing = (size t,Just t)
                 go (Just t') =
                     let (!added,merged) = merge curDepth t' t
                     in (added,Just merged)
@@ -388,7 +389,7 @@ unmerge (Branch n bs) r =
 -- unmergeBranches; dual to mergeBranches
 -- returns the decrease in size (as a result of removing elements of the right
 -- from the left) and the new TxtTrie
--- NOTE: not an optimal unmerge as we don't walk back up compressing on an empty tree
+-- NOTE: not an optimal unmerge as we don't walk back up compressing on an empty trie
 {-# INLINE unmergeBranches #-}
 unmergeBranches :: TxtTrieInternal a -> TxtTrieInternal a -> (Int,TxtTrieInternal a)
 unmergeBranches bs0 = IntMap.foldrWithKey unmergeBranches' (0,bs0)
@@ -500,7 +501,7 @@ lookup !k0 = go k0
                        Nothing -> Nothing
                        Just r  -> go t r
                Nothing ->
-                   case IntMap.lookup 0 bs of
+                   case IntMap.lookup (-1) bs of
                        Nothing -> Nothing
                        Just r  -> go k r
 
@@ -520,7 +521,7 @@ find !k0 = go k0
                        Nothing -> not_found
                        Just r  -> go t r
                Nothing ->
-                   case IntMap.lookup 0 bs of
+                   case IntMap.lookup (-1) bs of
                        Nothing -> not_found
                        Just r  -> go k r
 
@@ -542,7 +543,7 @@ findWithDefault def !k0 = go k0
                        Nothing -> def
                        Just r  -> go t r
                Nothing ->
-                   case IntMap.lookup 0 bs of
+                   case IntMap.lookup (-1) bs of
                        Nothing -> def
                        Just r  -> go k r
 
