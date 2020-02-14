@@ -3,7 +3,7 @@
 }:
 mkDerivation {
   pname = "pure-txt-trie";
-  version = "0.7.0.0";
+  version = "0.8.0.0";
   src = ./.;
   libraryHaskellDepends = [
     base containers deepseq pure-json pure-txt
